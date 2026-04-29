@@ -1,0 +1,39 @@
+steps:
+  # 1. Build Docker image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      [
+        'build',
+        '-t',
+        'europe-west1-docker.pkg.dev/$PROJECT_ID/sftp-pipeline/app:$SHORT_SHA',
+        '.'
+      ]
+
+  # 2. Push to Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      [
+        'push',
+        'europe-west1-docker.pkg.dev/$PROJECT_ID/sftp-pipeline/app:$SHORT_SHA'
+      ]
+
+  # 3. Deploy to Cloud Run Job
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      [
+        'run', 'jobs', 'deploy', 'sftp-to-bq-job',
+        '--image',
+        'europe-west1-docker.pkg.dev/$PROJECT_ID/sftp-pipeline/app:$SHORT_SHA',
+        '--region', 'europe-west1',
+        '--service-account', 'sftp-bq-pipeline-sa@$PROJECT_ID.iam.gserviceaccount.com',
+        '--set-env-vars',
+        'SFTP_HOST=sftpgo.feedonomics.com,SFTP_USER=fsd,BQ_PROJECT=$PROJECT_ID,BQ_DATASET=shopping_feeds_new,BQ_TABLE=stock_feed_v2',
+        '--set-secrets',
+        'SFTP_PASS=sftp-password:latest',
+        '--max-retries=1',
+        '--task-timeout=3600s'
+      ]
+
+images:
+  - 'europe-west1-docker.pkg.dev/$PROJECT_ID/sftp-pipeline/app:$SHORT_SHA'
